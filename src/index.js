@@ -1,7 +1,7 @@
-const fs = require("fs");
-const path = require("path");
-const traverse = require("traverse");
-const { get, has, find } = require("lodash");
+const fs = require("fs")
+const path = require("path")
+const traverse = require("traverse")
+const { get, has, find } = require("lodash")
 
 /**
  * Return an Array of every possible non-cyclic path in the object as a dot separated string sorted
@@ -14,15 +14,17 @@ const { get, has, find } = require("lodash");
  * @param  {Object}  obj  A plain JavaScript Object
  * @return {Array}  Sorted list of non-cyclic paths into obj
  */
-export const getSortedObjectPaths = (obj) => {
-  if (!obj) { return []; }
+export const getSortedObjectPaths = obj => {
+  if (!obj) {
+    return []
+  }
 
   return traverse(obj)
     .paths()
-    .filter((arr) => arr.length)
-    .map((arr) => arr.join("."))
-    .sort((elem) => elem.length);
-};
+    .filter(arr => arr.length)
+    .map(arr => arr.join("."))
+    .sort(elem => elem.length)
+}
 
 /**
  *  `babel-plugin-transfor-define` take options of two types: static config and a path to a file that
@@ -31,18 +33,20 @@ export const getSortedObjectPaths = (obj) => {
  * @param  {Object|String}  configOptions  configuration to parse
  * @return {Object}  replacement object
  */
-const getReplacements = (configOptions) => {
-  if (typeof configOptions === "object") { return configOptions; }
+const getReplacements = configOptions => {
+  if (typeof configOptions === "object") {
+    return configOptions
+  }
 
   try {
-    const fullPath = path.join(process.cwd(), configOptions);
-    fs.accessSync(fullPath, fs.F_OK);
-    return require(fullPath);
+    const fullPath = path.join(process.cwd(), configOptions)
+    fs.accessSync(fullPath, fs.F_OK)
+    return require(fullPath)
   } catch (err) {
-    console.error(`The nodePath: ${configOptions} is not valid.`); // eslint-disable-line
-    throw new Error(err);
+    console.error(`The nodePath: ${configOptions} is not valid.`) // eslint-disable-line
+    throw new Error(err)
   }
-};
+}
 
 /**
  * Replace a node with a given value. If the replacement results in a BinaryExpression, it will be
@@ -54,16 +58,17 @@ const getReplacements = (configOptions) => {
  * @return {undefined}
  */
 const replaceAndEvaluateNode = (replaceFn, nodePath, replacement) => {
-  nodePath.replaceWith(replaceFn(replacement));
+  // nodePath.replaceWith(replaceFn(replacement));
+  nodePath.replaceWithSourceString(replacement)
 
-  if (nodePath.parentPath.isBinaryExpression()) {
-    const result = nodePath.parentPath.evaluate();
-
-    if (result.confident) {
-      nodePath.parentPath.replaceWith(replaceFn(result.value));
-    }
-  }
-};
+  // if (nodePath.parentPath.isBinaryExpression()) {
+  //   const result = nodePath.parentPath.evaluate()
+  //
+  //   if (result.confident) {
+  //     nodePath.parentPath.replaceWith(replaceFn(result.value))
+  //   }
+  // }
+}
 
 /**
  * Finds the first replacement in sorted object paths for replacements that causes comparator
@@ -74,49 +79,56 @@ const replaceAndEvaluateNode = (replaceFn, nodePath, replacement) => {
  * @param  {function}   comparator   The function used to evaluate whether a node matches a value in `replacements`
  * @return {undefined}
  */
-const processNode = (replacements, nodePath, replaceFn, comparator) => { // eslint-disable-line
-  const replacementKey = find(getSortedObjectPaths(replacements),
-    (value) => comparator(nodePath, value));
+const processNode = (replacements, nodePath, replaceFn, comparator) => {
+  // eslint-disable-line
+  const replacementKey = find(getSortedObjectPaths(replacements), value =>
+    comparator(nodePath, value)
+  )
   if (has(replacements, replacementKey)) {
-    replaceAndEvaluateNode(replaceFn, nodePath, get(replacements, replacementKey));
+    replaceAndEvaluateNode(replaceFn, nodePath, get(replacements, replacementKey))
   }
-};
+}
 
-const memberExpressionComparator = (nodePath, value) => nodePath.matchesPattern(value);
-const identifierComparator = (nodePath, value) => nodePath.node.name === value;
-const unaryExpressionComparator = (nodePath, value) => nodePath.node.argument.name === value;
+const memberExpressionComparator = (nodePath, value) => nodePath.matchesPattern(value)
+const identifierComparator = (nodePath, value) => nodePath.node.name === value
+const unaryExpressionComparator = (nodePath, value) => nodePath.node.argument.name === value
 
-export default function ({ types: t }) {
+export default function({ types: t }) {
   return {
     visitor: {
-
       // process.env.NODE_ENV;
       MemberExpression(nodePath, state) {
-        processNode(getReplacements(state.opts), nodePath, t.valueToNode, memberExpressionComparator);
+        processNode(
+          getReplacements(state.opts),
+          nodePath,
+          t.valueToNode,
+          memberExpressionComparator
+        )
       },
 
       // const x = { version: VERSION };
       Identifier(nodePath, state) {
-        processNode(getReplacements(state.opts), nodePath, t.valueToNode, identifierComparator);
+        processNode(getReplacements(state.opts), nodePath, t.valueToNode, identifierComparator)
       },
 
       // typeof window
       UnaryExpression(nodePath, state) {
-        if (nodePath.node.operator !== "typeof") { return; }
+        if (nodePath.node.operator !== "typeof") {
+          return
+        }
 
-        const replacements = getReplacements(state.opts);
-        const keys = Object.keys(replacements);
-        const typeofValues = {};
+        const replacements = getReplacements(state.opts)
+        const keys = Object.keys(replacements)
+        const typeofValues = {}
 
-        keys.forEach((key) => {
+        keys.forEach(key => {
           if (key.substring(0, 7) === "typeof ") {
-            typeofValues[key.substring(7)] = replacements[key];
+            typeofValues[key.substring(7)] = replacements[key]
           }
-        });
+        })
 
-        processNode(typeofValues, nodePath, t.valueToNode, unaryExpressionComparator);
+        processNode(typeofValues, nodePath, t.valueToNode, unaryExpressionComparator)
       }
-
     }
-  };
+  }
 }
